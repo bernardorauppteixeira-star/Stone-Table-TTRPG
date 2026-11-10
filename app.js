@@ -8,6 +8,7 @@
   const magnifierContext = magnifierCanvas.getContext('2d');
   const STORAGE_KEY = 'stone-plate-state-v1';
   const ADMIN_STORAGE_KEY = 'stone-plate-admin-library-v1';
+  const ACTIVE_PROJECTILES_STORAGE_KEY = 'stone-plate-active-projectiles-v1';
   const LEGACY_STORAGE_KEY = 'talus-board-v1';
   const LEGACY_HEALTH_STORAGE_KEY = 'health-state';
   const GRID = 64;
@@ -671,7 +672,7 @@
   let linePreview = null;
   let pendingProjectileStart = null;
   let projectilePreview = null;
-  let activeProjectiles = [];
+  let activeProjectiles = loadActiveProjectiles();
   let projectileImpacts = [];
   let projectileMarks = [];
   let projectileParticles = [];
@@ -744,6 +745,45 @@
     } catch (error) {
       console.warn('Não foi possível carregar a biblioteca administrativa.', error);
       return { maps: [], projectiles: [], tokens: [], decorations: [] };
+    }
+  }
+
+  function loadActiveProjectiles() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ACTIVE_PROJECTILES_STORAGE_KEY) || '[]');
+      if (!Array.isArray(saved)) throw new Error('Invalid active projectile data.');
+      return saved.filter(projectile =>
+        projectile &&
+        typeof projectile.id === 'string' &&
+        projectile.start && Number.isFinite(projectile.start.x) && Number.isFinite(projectile.start.y) &&
+        projectile.end && Number.isFinite(projectile.end.x) && Number.isFinite(projectile.end.y) &&
+        Array.isArray(projectile.path) &&
+        Array.isArray(projectile.pathProgress) &&
+        Number.isFinite(projectile.progress)
+      ).map(projectile => {
+        const restored = { ...projectile, markedTokenIds: new Set(projectile.markedTokenIds || []) };
+        delete restored.travelFromProgress;
+        delete restored.travelToProgress;
+        delete restored.travelStartedAt;
+        delete restored.travelDuration;
+        return restored;
+      });
+    } catch (error) {
+      console.warn('Não foi possível carregar os projéteis ativos salvos.', error);
+      return [];
+    }
+  }
+
+  function saveActiveProjectiles() {
+    try {
+      const saved = activeProjectiles.map(projectile => ({
+        ...projectile,
+        markedTokenIds: [...projectile.markedTokenIds]
+      }));
+      localStorage.setItem(ACTIVE_PROJECTILES_STORAGE_KEY, JSON.stringify(saved));
+    } catch (error) {
+      console.warn('Não foi possível salvar os projéteis ativos.', error);
+      showToast('Não foi possível salvar os projéteis ativos.');
     }
   }
 
@@ -838,7 +878,7 @@
     let data;
     if (category === 'maps') data = JSON.parse(JSON.stringify(mapStateWithDecorationImages()));
     if (category === 'projectiles') {
-      data = Object.fromEntries(['projectileType', 'projectileAngle', 'projectileAoe', 'projectileSpeed', 'projectileWidth', 'projectileHeight', 'projectileDamage', 'projectileDamageType', 'projectileDamageForceType', 'projectileDamageDice'].map(id => [id, document.querySelector(`#${id}`).value]));
+      data = Object.fromEntries(['projectileType', 'projectileShape', 'projectileAngle', 'projectileConeAngle', 'projectileAoe', 'projectileSpeed', 'projectileWidth', 'projectileHeight', 'projectileDamage', 'projectileDamageType', 'projectileDamageForceType', 'projectileDamageDice'].map(id => [id, document.querySelector(`#${id}`).value]));
       data.projectileLinearTrail = document.querySelector('#projectileLinearTrail').checked;
       data.projectileAutoRollDamage = document.querySelector('#projectileAutoRollDamage').checked;
       data.projectilePierce = document.querySelector('#projectilePierce').checked;
@@ -1219,6 +1259,7 @@
   window.StonePlate = {
     getState: () => state,
     getSelectedTokenId: () => selectedId,
+    saveActiveProjectiles,
     updateHealth,
     addCharacter,
     advanceTurn: advanceHealthTurn,
@@ -2134,17 +2175,76 @@
       context.strokeStyle = color;
       context.lineWidth = 2;
       context.setLineDash([8, 5]);
-      context.beginPath(); context.moveTo(projectile.start.x, projectile.start.y); context.lineTo(projectile.end.x, projectile.end.y); context.stroke();
+      if (projectile.shape === 'explosion') {
+        context.fillStyle = color;
+        context.beginPath(); context.arc(projectile.start.x, projectile.start.y, projectile.aoe * GRID, 0, Math.PI * 2); context.fill(); context.stroke();
+      } else if (projectile.shape === 'cone') {
+        const range = Math.hypot(projectile.end.x - projectile.start.x, projectile.end.y - projectile.start.y);
+        const direction = Math.atan2(projectile.end.y - projectile.start.y, projectile.end.x - projectile.start.x);
+        const halfAngle = (projectile.coneAngle || 90) * Math.PI / 360;
+        context.fillStyle = color;
+        context.beginPath();
+        context.moveTo(projectile.start.x, projectile.start.y);
+        context.arc(projectile.start.x, projectile.start.y, range, direction - halfAngle, direction + halfAngle);
+        context.closePath();
+        context.fill(); context.stroke();
+      } else {
+        context.beginPath(); context.moveTo(projectile.start.x, projectile.start.y); context.lineTo(projectile.end.x, projectile.end.y); context.stroke();
+      }
       context.setLineDash([]);
-      context.translate(projectile.end.x, projectile.end.y);
-      context.rotate(angle);
-      const projectileDimensions = projectileVisualSize(projectile);
-      context.scale(projectileDimensions.scaleX, projectileDimensions.scaleY);
-      context.fillStyle = color;
-      context.beginPath(); context.moveTo(8, 0); context.lineTo(-4, -4); context.lineTo(-4, 4); context.closePath(); context.fill();
+      if (projectile.shape === 'line') {
+        context.translate(projectile.end.x, projectile.end.y);
+        context.rotate(angle);
+        const projectileDimensions = projectileVisualSize(projectile);
+        context.scale(projectileDimensions.scaleX, projectileDimensions.scaleY);
+        context.fillStyle = color;
+        context.beginPath(); context.moveTo(8, 0); context.lineTo(-4, -4); context.lineTo(-4, 4); context.closePath(); context.fill();
+      }
     } else {
       const accent = projectileAccent(projectile.kind);
       const pulse = 0.82 + Math.sin(performance.now() / 55) * 0.18;
+      if (projectile.shape === 'cone') {
+        const direction = Math.atan2(projectile.end.y - projectile.start.y, projectile.end.x - projectile.start.x);
+        const halfAngle = (projectile.coneAngle || 90) * Math.PI / 360;
+        const range = Math.hypot(position.x - projectile.start.x, position.y - projectile.start.y);
+        const startAngle = direction - halfAngle;
+        const endAngle = direction + halfAngle;
+        const coneFade = Math.max(0.45, fade);
+
+        context.globalAlpha = coneFade * (PROJECTILE_TYPES[projectile.kind]?.trailOpacity ?? 0.7) * 0.48;
+        context.fillStyle = color;
+        context.shadowColor = color;
+        context.shadowBlur = 18;
+        context.beginPath();
+        context.moveTo(projectile.start.x, projectile.start.y);
+        context.arc(projectile.start.x, projectile.start.y, range, startAngle, endAngle);
+        context.closePath();
+        context.fill();
+
+        context.globalAlpha = coneFade * pulse;
+        context.strokeStyle = accent;
+        context.lineWidth = 2.5;
+        context.shadowBlur = 12;
+        context.beginPath();
+        context.moveTo(projectile.start.x, projectile.start.y);
+        context.lineTo(projectile.start.x + Math.cos(startAngle) * range, projectile.start.y + Math.sin(startAngle) * range);
+        context.moveTo(projectile.start.x, projectile.start.y);
+        context.lineTo(projectile.start.x + Math.cos(endAngle) * range, projectile.start.y + Math.sin(endAngle) * range);
+        context.stroke();
+        context.globalAlpha = coneFade * 0.8;
+        context.beginPath();
+        context.arc(projectile.start.x, projectile.start.y, range, startAngle, endAngle);
+        context.stroke();
+
+        context.globalAlpha = coneFade * pulse * 0.45;
+        context.strokeStyle = color;
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.arc(projectile.start.x, projectile.start.y, range * 0.72, startAngle, endAngle);
+        context.stroke();
+        context.restore();
+        return;
+      }
       context.globalAlpha = fade * (PROJECTILE_TYPES[projectile.kind]?.trailOpacity ?? 0.7);
       context.strokeStyle = color;
       context.lineCap = 'round';
@@ -2263,16 +2363,30 @@
       const color = projectileColor(impact.kind);
       const visualSize = projectileVisualSize(impact).effectScale;
       const radius = impact.aoe * GRID * progress || (8 + progress * 28) * visualSize;
+      const impactCenter = impact.shape === 'explosion' ? impact.start : impact.end;
       context.save();
       context.globalAlpha = 1 - progress;
       context.strokeStyle = color;
       context.lineWidth = (3 - progress * 1.5) * visualSize;
-      context.beginPath();
-      context.arc(impact.end.x, impact.end.y, radius, 0, Math.PI * 2);
-      context.stroke();
       context.fillStyle = color;
-      context.globalAlpha = (1 - progress) * 0.18;
-      context.beginPath(); context.arc(impact.end.x, impact.end.y, radius, 0, Math.PI * 2); context.fill();
+      if (impact.shape === 'cone') {
+        const direction = Math.atan2(impact.end.y - impact.start.y, impact.end.x - impact.start.x);
+        const halfAngle = (impact.coneAngle || 90) * Math.PI / 360;
+        const coneRadius = Math.hypot(impact.end.x - impact.start.x, impact.end.y - impact.start.y) * progress;
+        context.beginPath();
+        context.moveTo(impact.start.x, impact.start.y);
+        context.arc(impact.start.x, impact.start.y, coneRadius, direction - halfAngle, direction + halfAngle);
+        context.closePath();
+        context.stroke();
+        context.globalAlpha = (1 - progress) * 0.18;
+        context.fill();
+      } else {
+        context.beginPath();
+        context.arc(impactCenter.x, impactCenter.y, radius, 0, Math.PI * 2);
+        context.stroke();
+        context.globalAlpha = (1 - progress) * 0.18;
+        context.beginPath(); context.arc(impactCenter.x, impactCenter.y, radius, 0, Math.PI * 2); context.fill();
+      }
       context.globalAlpha = 1 - progress;
       context.strokeStyle = projectileAccent(impact.kind);
       context.lineWidth = 2 * visualSize;
@@ -2281,8 +2395,8 @@
         const inner = (5 + progress * 10) * visualSize;
         const outer = (13 + progress * 30) * visualSize;
         context.beginPath();
-        context.moveTo(impact.end.x + Math.cos(rayAngle) * inner, impact.end.y + Math.sin(rayAngle) * inner);
-        context.lineTo(impact.end.x + Math.cos(rayAngle) * outer, impact.end.y + Math.sin(rayAngle) * outer);
+        context.moveTo(impactCenter.x + Math.cos(rayAngle) * inner, impactCenter.y + Math.sin(rayAngle) * inner);
+        context.lineTo(impactCenter.x + Math.cos(rayAngle) * outer, impactCenter.y + Math.sin(rayAngle) * outer);
         context.stroke();
       }
       drawProjectileImpactDetail(impact, progress, now);
@@ -2296,6 +2410,7 @@
   function animateProjectiles() {
     projectileFrame = null;
     const now = performance.now();
+    const activeCount = activeProjectiles.length;
     for (const projectile of activeProjectiles) {
       if (projectile.travelToProgress === undefined) continue;
       const travelProgress = Math.min(1, (now - projectile.travelStartedAt) / projectile.travelDuration);
@@ -2306,6 +2421,7 @@
       } else if (travelProgress >= 1) delete projectile.travelToProgress;
     }
     activeProjectiles = activeProjectiles.filter(projectile => projectile.progress < 1);
+    if (activeProjectiles.length !== activeCount) saveActiveProjectiles();
     projectileImpacts = projectileImpacts.filter(impact => now - impact.startedAt < impact.duration);
     projectileMarks = projectileMarks.filter(mark => now - mark.startedAt < mark.duration && state.tokens.some(token => token.id === mark.tokenId));
     render();
@@ -2316,15 +2432,18 @@
   function projectileSettings() {
     const angleValue = document.querySelector('#projectileAngle').value;
     const aoe = Number(document.querySelector('#projectileAoe').value);
+    const coneAngle = Number(document.querySelector('#projectileConeAngle').value);
     const speed = Number(document.querySelector('#projectileSpeed').value);
     const widthTiles = Number(document.querySelector('#projectileWidth').value);
     const heightTiles = Number(document.querySelector('#projectileHeight').value);
     return {
       kind: document.querySelector('#projectileType').value,
+      shape: ['cone', 'explosion'].includes(document.querySelector('#projectileShape').value) ? document.querySelector('#projectileShape').value : 'line',
       damageType: normalizeDamageType(document.querySelector('#projectileDamageType').value),
       damageForceType: document.querySelector('#projectileDamageForceType').value === 'especial' ? 'especial' : 'fisico',
       angle: angleValue === '' ? null : Number(angleValue),
       aoe: Number.isFinite(aoe) ? Math.max(0, Math.min(20, aoe)) : 0,
+      coneAngle: [45, 60, 90, 120].includes(coneAngle) ? coneAngle : 90,
       speed: Number.isFinite(speed) ? Math.max(1, Math.min(999, Math.round(speed))) : 1,
       widthTiles: Number.isFinite(widthTiles) ? Math.max(0.25, Math.min(8, widthTiles)) : 0.5,
       heightTiles: Number.isFinite(heightTiles) ? Math.max(0.25, Math.min(8, heightTiles)) : 0.5,
@@ -2345,6 +2464,29 @@
       endpoint = { x: start.x + Math.cos(radians) * distance, y: start.y + Math.sin(radians) * distance };
     }
     return { x: snapCellCenter(endpoint.x), y: snapCellCenter(endpoint.y) };
+  }
+
+  function projectileAimEnd(start, target, settings) {
+    let aim = target;
+    if (settings.shape === 'cone') {
+      const distance = Math.hypot(target.x - start.x, target.y - start.y);
+      const range = settings.aoe > 0 ? Math.min(distance, settings.aoe * GRID) : distance;
+      if (distance > 0) aim = {
+        x: start.x + (target.x - start.x) * range / distance,
+        y: start.y + (target.y - start.y) * range / distance
+      };
+    }
+    return projectileEndForAngle(start, aim, settings.angle);
+  }
+
+  function activeTurnCasterToken() {
+    return state.tokens.find(token => String(token.id) === String(state.initiative.activeTokenId || '')) || null;
+  }
+
+  function pointOnToken(point, token) {
+    const dimensions = tokenDimensions(token);
+    return Math.abs(point.x - token.x) <= dimensions.width / 2 + 4 &&
+      Math.abs(point.y - token.y) <= dimensions.height / 2 + 4;
   }
 
   async function markProjectileToken(projectile, token) {
@@ -2415,6 +2557,10 @@
 
   function moveProjectileTo(projectile, targetIndex) {
     const nextProgress = Math.min(1, Math.max(projectile.progress, targetIndex));
+    if (projectile.shape !== 'line') {
+      projectile.progress = nextProgress;
+      return nextProgress >= 1;
+    }
     for (let index = projectile.pathIndex + 1; index < projectile.path.length; index++) {
       if (projectile.pathProgress[index] > nextProgress + 1e-9) break;
       const cell = projectile.path[index];
@@ -2436,10 +2582,26 @@
   }
 
   function markProjectileAoe(projectile) {
+    if (projectile.shape === 'cone') {
+      const direction = Math.atan2(projectile.end.y - projectile.start.y, projectile.end.x - projectile.start.x);
+      const halfAngle = (projectile.coneAngle || 90) * Math.PI / 360;
+      const range = Math.hypot(projectile.end.x - projectile.start.x, projectile.end.y - projectile.start.y);
+      for (const token of state.tokens) {
+        if (String(token.id) === String(projectile.attackerTokenId)) continue;
+        const dx = token.x - projectile.start.x;
+        const dy = token.y - projectile.start.y;
+        const distance = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        const difference = Math.atan2(Math.sin(angle - direction), Math.cos(angle - direction));
+        if (distance <= range && Math.abs(difference) <= halfAngle) markProjectileToken(projectile, token);
+      }
+      return;
+    }
+    const center = projectile.shape === 'explosion' ? projectile.start : projectile.end;
     const radius = projectile.aoe * GRID;
     if (!radius) return;
     for (const token of state.tokens) {
-      if (Math.hypot(token.x - projectile.end.x, token.y - projectile.end.y) <= radius) markProjectileToken(projectile, token);
+      if (Math.hypot(token.x - center.x, token.y - center.y) <= radius) markProjectileToken(projectile, token);
     }
   }
 
@@ -2447,7 +2609,7 @@
     markProjectileAoe(projectile);
     const form = PROJECTILE_TYPES[projectile.kind]?.form;
     const duration = form === 'geo' ? 2600 : form === 'storm' ? 1500 : form === 'flame' ? 1150 : 850;
-    projectileImpacts.push({ end: projectile.end, kind: projectile.kind, aoe: projectile.aoe, widthTiles: projectile.widthTiles, heightTiles: projectile.heightTiles, startedAt: performance.now(), duration });
+    projectileImpacts.push({ start: projectile.start, end: projectile.end, kind: projectile.kind, shape: projectile.shape, coneAngle: projectile.coneAngle, aoe: projectile.aoe, widthTiles: projectile.widthTiles, heightTiles: projectile.heightTiles, startedAt: performance.now(), duration });
     if (projectileFrame === null) projectileFrame = requestAnimationFrame(animateProjectiles);
   }
 
@@ -2463,6 +2625,7 @@
       projectile.travelStartedAt = now;
       projectile.travelDuration = 450;
     }
+    saveActiveProjectiles();
     if (activeProjectiles.some(projectile => projectile.travelToProgress !== undefined) && projectileFrame === null) projectileFrame = requestAnimationFrame(animateProjectiles);
     if (relay) {
       const message = { type: 'projectile-turn', id };
@@ -3797,20 +3960,54 @@
     if (tool === 'projectile') {
       const position = { x: snapCellCenter(point.x), y: snapCellCenter(point.y) };
       if (!pointInsideMap(position)) return;
+      const settings = projectileSettings();
+      if (settings.shape === 'line') {
+        if (!pendingProjectileStart) {
+          pendingProjectileStart = { ...position };
+          projectilePreview = { start: position, end: position, aimEnd: position, kind: settings.kind, shape: settings.shape, aoe: settings.aoe, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
+          render();
+        } else {
+          const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
+          const end = projectileAimEnd(start, position, settings);
+          if (!pointInsideMap(end)) { showToast('O destino calculado fica fora do mapa.'); return; }
+          pendingProjectileStart = null;
+          projectilePreview = null;
+          dragReadout = null;
+          launchProjectile(start, end, settings);
+        }
+        return;
+      }
+
+      const caster = activeTurnCasterToken();
+      if (!caster) { showToast('Defina um token ativo na iniciativa para lançar cone ou explosão.'); return; }
+      if (settings.shape === 'explosion') {
+        if (!pointOnToken(position, caster)) { showToast('Clique no token ativo da iniciativa para confirmar a explosão.'); return; }
+        if (!settings.aoe) { showToast('Defina um raio maior que zero para a explosão.'); return; }
+        const origin = { x: caster.x, y: caster.y };
+        launchProjectile(origin, origin, { ...settings, attackerTokenId: caster.id, instant: true });
+        return;
+      }
+
       if (!pendingProjectileStart) {
-        pendingProjectileStart = { ...position };
-        const settings = projectileSettings();
-        projectilePreview = { start: position, end: position, aimEnd: position, kind: settings.kind, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
+        if (!pointOnToken(position, caster)) { showToast('Clique no token ativo da iniciativa para iniciar o cone.'); return; }
+        pendingProjectileStart = { x: caster.x, y: caster.y, tokenId: caster.id };
+        projectilePreview = { start: { x: caster.x, y: caster.y }, end: { x: caster.x, y: caster.y }, aimEnd: position, kind: settings.kind, shape: settings.shape, aoe: settings.aoe, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
         render();
       } else {
+        if (String(pendingProjectileStart.tokenId) !== String(caster.id)) {
+          pendingProjectileStart = null; projectilePreview = null;
+          showToast('O turno mudou; inicie o cone novamente pelo token ativo.');
+          render();
+          return;
+        }
         const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
-        const settings = projectileSettings();
-        const end = projectileEndForAngle(start, position, settings.angle);
-        if (!pointInsideMap(end)) { showToast('O destino calculado fica fora do mapa.'); return; }
+        const end = projectileAimEnd(start, position, settings);
+        if (Math.hypot(end.x - start.x, end.y - start.y) < GRID / 2) { showToast('Escolha uma direção e alcance para o cone.'); return; }
+        if (!pointInsideMap(end)) { showToast('O alcance calculado fica fora do mapa.'); return; }
         pendingProjectileStart = null;
         projectilePreview = null;
         dragReadout = null;
-        launchProjectile(start, end, settings);
+        launchProjectile(start, end, { ...settings, attackerTokenId: caster.id });
       }
       return;
     }
@@ -3928,8 +4125,9 @@
       if (tool === 'projectile' && pendingProjectileStart) {
         const target = { x: snapCellCenter(point.x), y: snapCellCenter(point.y) };
         const settings = projectileSettings();
-        const endpoint = projectileEndForAngle(pendingProjectileStart, target, settings.angle);
-        projectilePreview = { start: { x: pendingProjectileStart.x, y: pendingProjectileStart.y }, end: endpoint, aimEnd: target, kind: settings.kind, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
+        const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
+        const endpoint = projectileAimEnd(start, target, settings);
+        projectilePreview = { start, end: endpoint, aimEnd: target, kind: settings.kind, shape: settings.shape, aoe: settings.aoe, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
         const tiles = Math.ceil(Math.hypot(target.x - pendingProjectileStart.x, target.y - pendingProjectileStart.y) / GRID);
         dragReadout = { x: screen.x, y: screen.y, text: `${tiles} tiles` };
       }
@@ -4216,7 +4414,10 @@
   function launchProjectile(start, end, settings, id = crypto.randomUUID(), relay = true) {
     const kind = settings?.kind;
     if (!PROJECTILE_TYPES[kind] || !Number.isFinite(start?.x) || !Number.isFinite(start?.y) || !Number.isFinite(end?.x) || !Number.isFinite(end?.y) || !pointInsideMap(start) || !pointInsideMap(end) || seenProjectiles.has(id)) return false;
-    const launchToken = findToken(start);
+    const shape = ['cone', 'explosion'].includes(settings.shape) ? settings.shape : 'line';
+    const launchToken = settings.attackerTokenId
+      ? state.tokens.find(item => String(item.id) === String(settings.attackerTokenId))
+      : findToken(start);
     const launchCharacter = launchToken ? getLinkedCharacterForToken(launchToken) : null;
     if (launchCharacter?.lostActionType === 'attack' && Number(launchCharacter.lostActions) > 0) {
       launchCharacter.lostActions = Math.max(0, Number(launchCharacter.lostActions) - 1);
@@ -4233,6 +4434,7 @@
     const damage = Number.isFinite(Number(settings.damage)) ? Math.max(0, Math.min(1000, Number(settings.damage))) : 0;
     const widthTiles = Number.isFinite(Number(settings.widthTiles)) ? Math.max(0.25, Math.min(8, Number(settings.widthTiles))) : 0.5;
     const heightTiles = Number.isFinite(Number(settings.heightTiles)) ? Math.max(0.25, Math.min(8, Number(settings.heightTiles))) : 0.5;
+    const coneAngle = [45, 60, 90, 120].includes(Number(settings.coneAngle)) ? Number(settings.coneAngle) : 90;
     const pierce = Boolean(settings.pierce);
     const path = projectileCellRoute(start, end);
     const deltaX = end.x - start.x;
@@ -4244,7 +4446,7 @@
     const orderedPath = path.map((cell, index) => ({ cell, progress: pathProgress[index] }))
       .sort((first, second) => first.progress - second.progress);
     const projectile = {
-      id, start: { ...start }, end: { ...end }, kind, aoe, speed,
+      id, start: { ...start }, end: { ...end }, kind, shape, coneAngle, aoe, speed,
       damageType: normalizeDamageType(settings.damageType),
       damageForceType: settings.damageForceType === 'especial' ? 'especial' : 'fisico',
       attackerTokenId: settings.attackerTokenId || findToken(start)?.id || null,
@@ -4261,10 +4463,13 @@
       moveProjectileTo(projectile, 1);
       projectile.progress = 1;
       addProjectileImpact(projectile);
-    } else activeProjectiles.push(projectile);
+    } else {
+      activeProjectiles.push(projectile);
+      saveActiveProjectiles();
+    }
     if (projectileFrame === null) projectileFrame = requestAnimationFrame(animateProjectiles);
     if (relay) {
-      const message = { type: 'projectile', projectile: { id, start, end, kind, aoe, speed, widthTiles, heightTiles, linearTrail: projectile.linearTrail, damageExpression: projectile.damageExpression, attackId: projectile.attackId, autoRollDamage: projectile.autoRollDamage, damage, damageType: projectile.damageType, damageForceType: projectile.damageForceType, attackerTokenId: projectile.attackerTokenId, pierce, instant: Boolean(settings.instant) } };
+      const message = { type: 'projectile', projectile: { id, start, end, kind, shape, coneAngle, aoe, speed, widthTiles, heightTiles, linearTrail: projectile.linearTrail, damageExpression: projectile.damageExpression, attackId: projectile.attackId, autoRollDamage: projectile.autoRollDamage, damage, damageType: projectile.damageType, damageForceType: projectile.damageForceType, attackerTokenId: projectile.attackerTokenId, pierce, instant: Boolean(settings.instant) } };
       if (hostMode) broadcast(message);
       else if (connections.has('host')) connections.get('host').send(message);
     }
@@ -4502,7 +4707,7 @@
 
   function requestPlayerIdentity() {
     const savedName = localStorage.getItem(PLAYER_NAME_KEY) || '';
-    const enteredName = window.prompt('Como deseja ser chamado na sala?', savedName || 'Jogador');
+    const enteredName = window.StoneTableAuth?.username || window.prompt('Como deseja ser chamado na sala?', savedName || 'Jogador');
     if (enteredName === null) return null;
     const name = enteredName.trim().slice(0, 24);
     if (!name) { showToast('Digite um nome para entrar na sala.'); return null; }
@@ -4879,13 +5084,25 @@
   const updateProjectilePreview = () => {
     if (!pendingProjectileStart || !projectilePreview) return;
     const settings = projectileSettings();
-    projectilePreview.end = projectileEndForAngle(pendingProjectileStart, projectilePreview.aimEnd, settings.angle);
+    const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
+    projectilePreview.end = projectileAimEnd(start, projectilePreview.aimEnd, settings);
     projectilePreview.kind = settings.kind;
+    projectilePreview.shape = settings.shape;
+    projectilePreview.aoe = settings.aoe;
+    projectilePreview.coneAngle = settings.coneAngle;
     projectilePreview.widthTiles = settings.widthTiles;
     projectilePreview.heightTiles = settings.heightTiles;
     render();
   };
+  document.querySelector('#projectileShape').addEventListener('change', () => {
+    pendingProjectileStart = null;
+    projectilePreview = null;
+    dragReadout = null;
+    render();
+  });
   document.querySelector('#projectileAngle').addEventListener('input', updateProjectilePreview);
+  document.querySelector('#projectileAoe').addEventListener('input', updateProjectilePreview);
+  document.querySelector('#projectileConeAngle').addEventListener('input', updateProjectilePreview);
   document.querySelector('#projectileType').addEventListener('change', updateProjectilePreview);
   document.querySelector('#projectileWidth').addEventListener('input', updateProjectilePreview);
   document.querySelector('#projectileHeight').addEventListener('input', updateProjectilePreview);
@@ -5083,6 +5300,7 @@
   });
   window.addEventListener('keyup', event => { if (event.code === 'Space') delete canvas.dataset.space; });
   document.querySelector('#roomCode').addEventListener('keydown', event => { if (event.key === 'Enter') joinRoom(); });
+  window.addEventListener('pagehide', saveActiveProjectiles);
 
   ensureCharacterTokens(); syncHealthToTokens(); syncInitiativeFromHealth();
   setTool('select'); resizeCanvas(); updatePlayers(); saveState();

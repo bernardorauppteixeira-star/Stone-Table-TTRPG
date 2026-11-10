@@ -10,18 +10,27 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="characters.css">
-  <link rel="stylesheet" href="audio.css">
-  <link rel="stylesheet" href="dice.css">
-  <link rel="stylesheet" href="neon-theme.css">
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
-  <script src="characters.js" defer></script>
-  <script src="audio.js" defer></script>
-  <script src="app.js" defer></script>
-  <script src="polyhedral-dice.js" defer></script>
-  <script src="dice.js" defer></script>
+  <link rel="stylesheet" href="auth.css">
+  <script src="auth.js" defer></script>
 </head>
-<body>
+<body class="auth-required">
+  <main class="auth-screen" id="authScreen">
+    <section class="auth-card" aria-labelledby="authTitle">
+      <img class="auth-logo" src="stone-league-logo.png" alt="">
+      <p class="auth-eyebrow">STONE LEAGUE RPG</p>
+      <h1 id="authTitle">Entre na sua conta</h1>
+      <p class="auth-description">Use seu nome de usuário e senha para acessar a mesa.</p>
+      <form class="auth-form" id="authForm">
+        <label for="authUsernameInput">Nome de usuário</label>
+        <input id="authUsernameInput" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" required>
+        <label for="authPasswordInput">Senha</label>
+        <input id="authPasswordInput" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+        <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+        <button class="button button-primary auth-submit" id="authSubmit" type="submit">Entrar</button>
+      </form>
+      <p class="auth-switch"><span id="authSwitchText">Ainda não tem uma conta?</span> <button type="button" id="authModeButton">Criar conta</button></p>
+    </section>
+  </main>
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="#" aria-label="Stone League RPG, início">
@@ -38,6 +47,8 @@
       </nav>
       <div class="room-controls">
         <span class="connection-indicator" id="connectionIndicator"><i></i><span id="connectionLabel">Local</span></span>
+        <span class="auth-account" id="authUsername"></span>
+        <button class="button button-secondary auth-logout" id="logoutButton" type="button">Sair</button>
         <label class="sr-only" for="roomCode">Código da sala</label>
         <input id="roomCode" class="room-input" type="text" maxlength="24" placeholder="código da sala" autocomplete="off">
         <button class="button button-secondary" id="joinRoomButton" type="button">Entrar</button>
@@ -190,8 +201,14 @@
               <option value="destructio">Destructio</option>
               <option value="creatio">Creatio</option>
             </select>
-            <label class="field-label spacing-top" for="projectileAngle">DIREÇÃO (8 ÂNGULOS)</label>
-            <select id="projectileAngle" class="text-input">
+              <label class="field-label spacing-top" for="projectileShape">FORMA DO DISPARO</label>
+              <select id="projectileShape" class="text-input">
+                <option value="line">Linear</option>
+                <option value="cone">Cone a partir do token ativo</option>
+                <option value="explosion">Explosão no token ativo</option>
+              </select>
+              <label class="field-label spacing-top" for="projectileAngle">DIREÇÃO (8 ÂNGULOS)</label>
+              <select id="projectileAngle" class="text-input">
               <option value="auto">Automático (8 direções)</option>
               <option value="0">Leste · 0°</option>
               <option value="45">Sudeste · 45°</option>
@@ -203,7 +220,8 @@
               <option value="315">Nordeste · 315°</option>
             </select>
             <div class="projectile-fields">
-              <label><span class="field-label">ÁREA (TILES)</span><input id="projectileAoe" class="text-input" type="number" min="0" max="20" step="0.5" value="0"></label>
+              <label><span class="field-label">ALCANCE / RAIO (TILES)</span><input id="projectileAoe" class="text-input" type="number" min="0" max="20" step="0.5" value="0"></label>
+              <label><span class="field-label">ÂNGULO DO CONE</span><select id="projectileConeAngle" class="text-input"><option value="45">45°</option><option value="60">60°</option><option value="90" selected>90°</option><option value="120">120°</option></select></label>
               <label><span class="field-label">VELOCIDADE (TILES/S)</span><input id="projectileSpeed" class="text-input" type="number" min="1" max="999" step="1" value="1"></label>
               <label><span class="field-label">LARGURA (TILES)</span><input id="projectileWidth" class="text-input" type="number" min="0.25" max="8" step="0.25" value="0.5"></label>
               <label><span class="field-label">ALTURA (TILES)</span><input id="projectileHeight" class="text-input" type="number" min="0.25" max="8" step="0.25" value="0.5"></label>
@@ -216,7 +234,7 @@
             <label class="check-row"><input id="projectileAutoRollDamage" type="checkbox"><span class="custom-check"></span><span>Rolar dano automaticamente ao acertar</span></label>
             <label class="check-row"><input id="projectilePierce" type="checkbox"><span class="custom-check"></span><span>Perfurante</span></label>
             <label class="check-row"><input id="projectileInstant" type="checkbox"><span class="custom-check"></span><span>Avanço instantâneo</span></label>
-            <p class="field-note">Clique na origem e no destino para traçar a rota por tiles. A direção automática escolhe a mais próxima das oito.</p>
+            <p class="field-note">No disparo linear, clique na origem e no destino. No cone ou explosão, o token ativo da iniciativa é a origem; clique nele para começar o cone ou confirmar a explosão. O alcance do cone também pode ser definido pelo campo acima.</p>
           </div>
           <div id="colorOptions" class="options-content" hidden>
             <label class="field-label" for="drawColor">COR RGB DA MARCAÇÃO</label>
