@@ -131,10 +131,15 @@
     </div>`);
   document.body.insertAdjacentHTML('beforeend', `
     <div class="instinct-roll-overlay" id="instinctRollOverlay" role="status" aria-live="assertive" hidden>
+      <svg class="instinct-lightning" id="instinctLightning" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M-50 170 150 122 210 151 350 96 400 126 540 72 600 111 730 52 785 91 930 38 1050 68"/>
+        <path d="M-50 170 150 122 210 151 350 96 400 126 540 72 600 111 730 52 785 91 930 38 1050 68"/>
+      </svg>
       <div class="instinct-roll-content">
-        <span class="instinct-roll-caption">SURTO DE INSTINTO · 1D100</span>
+        <span class="instinct-roll-caption">TESTE DE INSTINTO · 1D100</span>
         <div class="instinct-roll-die" id="instinctRollDie"><div class="instinct-3d-stage" id="instinctDice3dStage" aria-hidden="true"></div><span class="instinct-roll-face" id="instinctRollFace">100</span></div>
         <strong class="instinct-roll-result" id="instinctRollResult"></strong>
+        <div class="instinct-sparks" id="instinctSparks" aria-hidden="true"></div>
       </div>
     </div>`);
 
@@ -166,9 +171,12 @@
   const instinctDie = document.querySelector('#instinctRollDie');
   const instinctFace = document.querySelector('#instinctRollFace');
   const instinctResult = document.querySelector('#instinctRollResult');
+  const instinctSparks = document.querySelector('#instinctSparks');
+  const instinctLightning = document.querySelector('#instinctLightning');
   let instinctRollTimer = 0;
   let instinctAnimationTimer = 0;
   let instinctPolyhedralRendered = false;
+  let instinctRollSequence = 0;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -412,70 +420,94 @@
     return value[0] % sides + 1;
   }
 
-  function renderInstinctRoll(roll, animate = true) {
+  function renderInstinctRoll(roll) {
     if (!isValidRoll(roll) || !rememberRoll(roll.id) || roll.displayMode !== 'instinct') return;
     const value = roll.groups[0].values[0];
     const surge = value === 100;
+    const sequence = ++instinctRollSequence;
     window.clearTimeout(instinctRollTimer);
     window.clearInterval(instinctAnimationTimer);
     instinctOverlay.hidden = false;
     instinctOverlay.classList.toggle('is-surge', surge);
     instinctOverlay.classList.toggle('is-polyhedral', instinctPolyhedralRendered);
+    instinctOverlay.classList.remove('is-spark-burst', 'is-rolling');
     instinctDie.classList.remove('is-rolling', 'is-surge');
-    instinctFace.textContent = instinctPolyhedralRendered ? '' : animate ? '00' : String(value);
+    instinctLightning.classList.remove('is-active');
+    instinctSparks.replaceChildren();
+    instinctFace.textContent = instinctPolyhedralRendered ? '' : '00';
     const surgeBonus = Math.max(0, Number(roll.criticalBonusPercent ?? 10)) * 3;
-    instinctResult.textContent = animate ? 'O instinto se manifesta...' : surge ? `SURTO DE INSTINTO · BÔNUS DE DANO +${surgeBonus}%` : 'Golpe padrão';
-    if (animate) {
-      instinctDie.classList.add('is-rolling');
-      if (!instinctPolyhedralRendered) instinctAnimationTimer = window.setInterval(() => { instinctFace.textContent = String(randomFace(100)); }, 70);
-      instinctRollTimer = window.setTimeout(() => {
-        window.clearInterval(instinctAnimationTimer);
-        instinctAnimationTimer = 0;
-        instinctDie.classList.remove('is-rolling');
-        instinctFace.textContent = instinctPolyhedralRendered ? '' : String(value);
-        instinctResult.textContent = surge ? `SURTO DE INSTINTO · BÔNUS DE DANO +${surgeBonus}%` : 'Golpe padrão';
-        if (surge) instinctDie.classList.add('is-surge');
-        instinctRollTimer = window.setTimeout(() => { instinctOverlay.hidden = true; }, 2100);
-      }, 1100);
-      return;
-    }
-    if (surge) instinctDie.classList.add('is-surge');
-    instinctRollTimer = window.setTimeout(() => { instinctOverlay.hidden = true; }, 2600);
+    instinctResult.textContent = 'O instinto se manifesta...';
+    instinctOverlay.classList.add('is-rolling');
+    instinctDie.classList.add('is-rolling');
+    if (!instinctPolyhedralRendered) instinctAnimationTimer = window.setInterval(() => { instinctFace.textContent = String(randomFace(100)); }, 70);
+    createInstinctSparks(8);
+    instinctRollTimer = window.setTimeout(() => {
+      if (sequence !== instinctRollSequence) return;
+      window.clearInterval(instinctAnimationTimer);
+      instinctAnimationTimer = 0;
+      instinctOverlay.classList.remove('is-rolling');
+      instinctDie.classList.remove('is-rolling');
+      instinctFace.textContent = instinctPolyhedralRendered ? '' : String(value);
+      if (surge) {
+        instinctDie.classList.add('is-surge');
+        instinctLightning.classList.add('is-active');
+        instinctResult.textContent = '';
+        instinctRollTimer = window.setTimeout(() => {
+          if (sequence !== instinctRollSequence) return;
+          instinctLightning.classList.remove('is-active');
+          instinctResult.textContent = `SURTO DE INSTINTO · BÔNUS DE DANO +${surgeBonus}%`;
+          instinctRollTimer = window.setTimeout(() => { instinctOverlay.hidden = true; }, 2100);
+        }, 650);
+        return;
+      }
+      instinctOverlay.classList.add('is-spark-burst');
+      createInstinctSparks(18);
+      instinctResult.textContent = 'Golpe padrão';
+      instinctRollTimer = window.setTimeout(() => { instinctOverlay.hidden = true; }, 1900);
+    }, 1900);
+    return sequence;
   }
 
-  async function replayReceivedInstinctRoll(roll) {
+  function createInstinctSparks(count) {
+    const sparks = document.createDocumentFragment();
+    for (let index = 0; index < count; index += 1) {
+      const spark = document.createElement('span');
+      spark.className = 'instinct-spark';
+      spark.style.setProperty('--spark-angle', `${Math.round(index * 360 / count + (Math.random() * 18 - 9))}deg`);
+      spark.style.setProperty('--spark-distance', `${48 + Math.random() * 90}px`);
+      spark.style.setProperty('--spark-delay', `${Math.random() * 180}ms`);
+      sparks.append(spark);
+    }
+    instinctSparks.replaceChildren(sparks);
+  }
+
+  async function renderInstinctPolyhedral(roll, sequence) {
+    try {
+      await window.StonePlatePolyhedralDice.roll(instinctDice3dStage, [{
+        sides: 100,
+        value: roll.groups[0].values[0],
+        critical: roll.groups[0].values[0] >= criticalThreshold(100, roll.criticalRate || 1)
+      }]);
+      if (sequence !== instinctRollSequence) return;
+      instinctPolyhedralRendered = true;
+      instinctOverlay.classList.add('is-polyhedral');
+      instinctFace.textContent = '';
+    } catch (error) {
+      instinctPolyhedralRendered = false;
+      console.warn('Exibição 3D do d100 indisponível; usando o d100 local.', error);
+    }
+  }
+
+  function replayReceivedInstinctRoll(roll) {
     if (!isValidRoll(roll) || seenRolls.has(roll.id) || roll.displayMode !== 'instinct') return;
-    instinctOverlay.hidden = false;
-    instinctOverlay.classList.remove('is-surge');
-    instinctDie.classList.remove('is-surge');
     instinctPolyhedralRendered = false;
-    instinctFace.textContent = '';
-    instinctResult.textContent = 'O instinto se manifesta...';
-    try {
-      await window.StonePlatePolyhedralDice.roll(instinctDice3dStage, [{ sides: 100, value: roll.groups[0].values[0], critical: roll.groups[0].values[0] >= criticalThreshold(100, roll.criticalRate || 1) }]);
-      instinctPolyhedralRendered = true;
-    } catch (error) {
-      instinctPolyhedralRendered = false;
-      console.warn('Exibição 3D do d100 recebido indisponível.', error);
-    }
-    renderInstinctRoll(roll, false);
+    const sequence = renderInstinctRoll(roll);
+    if (sequence) renderInstinctPolyhedral(roll, sequence);
   }
 
-  async function rollInstinctAttack(criticalBonusPercent = 10) {
-    instinctOverlay.hidden = false;
-    instinctOverlay.classList.remove('is-surge');
-    instinctDie.classList.remove('is-surge');
+  function rollInstinctAttack(criticalBonusPercent = 10) {
     instinctPolyhedralRendered = false;
-    instinctFace.textContent = '';
-    instinctResult.textContent = 'O instinto se manifesta...';
     const value = randomFace(100);
-    try {
-      await window.StonePlatePolyhedralDice.roll(instinctDice3dStage, [{ sides: 100, value, critical: value >= criticalThreshold(100, 1) }]);
-      instinctPolyhedralRendered = true;
-    } catch (error) {
-      instinctPolyhedralRendered = false;
-      console.warn('Rolagem 3D do instinto indisponível; usando o d100 local.', error);
-    }
     const roll = {
       id: crypto.randomUUID(),
       expression: '1d100',
@@ -488,7 +520,8 @@
     };
     if (window.StonePlate?.broadcastDiceRoll) window.StonePlate.broadcastDiceRoll(roll);
     else channel?.postMessage({ type: 'dice-roll', roll });
-    renderInstinctRoll(roll, false);
+    const sequence = renderInstinctRoll(roll);
+    if (sequence) renderInstinctPolyhedral(roll, sequence);
     return roll;
   }
 

@@ -16,15 +16,39 @@
 <body class="auth-required">
   <main class="auth-screen" id="authScreen">
     <section class="auth-card" aria-labelledby="authTitle">
-      <img class="auth-logo" src="stone-league-logo.png" alt="">
-      <p class="auth-eyebrow">STONE LEAGUE RPG</p>
+      <div class="auth-brand"><img class="auth-logo" src="stone-league-logo.png" alt=""><span>Stone League RPG</span></div>
       <h1 id="authTitle">Entre na sua conta</h1>
-      <p class="auth-description">Use seu nome de usuário e senha para acessar a mesa.</p>
+      <p class="auth-description">Acesse sua mesa de jogo.</p>
       <form class="auth-form" id="authForm">
-        <label for="authUsernameInput">Nome de usuário</label>
-        <input id="authUsernameInput" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" required>
-        <label for="authPasswordInput">Senha</label>
-        <input id="authPasswordInput" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+        <div class="auth-credentials" id="authCredentials">
+          <div class="auth-field" id="authUsernameField" hidden>
+            <label for="authUsernameInput">Nome de usuário</label>
+            <input id="authUsernameInput" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+">
+          </div>
+          <div class="auth-field">
+            <label for="authEmailInput">E-mail</label>
+            <input id="authEmailInput" name="email" type="email" autocomplete="email" maxlength="254" required>
+          </div>
+          <div class="auth-field">
+            <label for="authPasswordInput">Senha</label>
+            <input id="authPasswordInput" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+          </div>
+        </div>
+        <div class="auth-verification" id="authVerification" hidden>
+          <label for="authVerificationCode">Código de confirmação</label>
+          <input id="authVerificationCode" name="verificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6">
+          <button class="auth-verification-cancel" id="authVerificationCancel" type="button">Voltar</button>
+        </div>
+        <div class="auth-extras" id="authExtras">
+          <div class="auth-providers" aria-label="Outras formas de entrar">
+            <button class="auth-provider" id="googleAuthButton" type="button" disabled><span class="provider-mark google-mark" aria-hidden="true">G</span><span>Continuar com Google</span></button>
+            <button class="auth-provider" id="discordAuthButton" type="button" disabled><span class="provider-mark discord-mark" aria-hidden="true">D</span><span>Continuar com Discord</span></button>
+          </div>
+          <label class="auth-remember" for="rememberUser">
+            <input id="rememberUser" name="remember" type="checkbox">
+            <span>Lembrar de mim</span>
+          </label>
+        </div>
         <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
         <button class="button button-primary auth-submit" id="authSubmit" type="submit">Entrar</button>
       </form>
@@ -205,7 +229,7 @@
               <select id="projectileShape" class="text-input">
                 <option value="line">Linear</option>
                 <option value="cone">Cone a partir do token ativo</option>
-                <option value="explosion">Explosão no token ativo</option>
+                <option value="explosion">Explosão (centro e raio)</option>
               </select>
               <label class="field-label spacing-top" for="projectileAngle">DIREÇÃO (8 ÂNGULOS)</label>
               <select id="projectileAngle" class="text-input">
@@ -220,7 +244,7 @@
               <option value="315">Nordeste · 315°</option>
             </select>
             <div class="projectile-fields">
-              <label><span class="field-label">ALCANCE / RAIO (TILES)</span><input id="projectileAoe" class="text-input" type="number" min="0" max="20" step="0.5" value="0"></label>
+              <label><span class="field-label">ALCANCE MÁXIMO DO CONE (TILES)</span><input id="projectileAoe" class="text-input" type="number" min="0" max="20" step="0.5" value="0"></label>
               <label><span class="field-label">ÂNGULO DO CONE</span><select id="projectileConeAngle" class="text-input"><option value="45">45°</option><option value="60">60°</option><option value="90" selected>90°</option><option value="120">120°</option></select></label>
               <label><span class="field-label">VELOCIDADE (TILES/S)</span><input id="projectileSpeed" class="text-input" type="number" min="1" max="999" step="1" value="1"></label>
               <label><span class="field-label">LARGURA (TILES)</span><input id="projectileWidth" class="text-input" type="number" min="0.25" max="8" step="0.25" value="0.5"></label>
@@ -234,7 +258,7 @@
             <label class="check-row"><input id="projectileAutoRollDamage" type="checkbox"><span class="custom-check"></span><span>Rolar dano automaticamente ao acertar</span></label>
             <label class="check-row"><input id="projectilePierce" type="checkbox"><span class="custom-check"></span><span>Perfurante</span></label>
             <label class="check-row"><input id="projectileInstant" type="checkbox"><span class="custom-check"></span><span>Avanço instantâneo</span></label>
-            <p class="field-note">No disparo linear, clique na origem e no destino. No cone ou explosão, o token ativo da iniciativa é a origem; clique nele para começar o cone ou confirmar a explosão. O alcance do cone também pode ser definido pelo campo acima.</p>
+            <p class="field-note">No disparo linear, clique na origem e no destino. No cone, clique no token ativo e depois na direção. Na explosão, clique no centro e depois no alcance máximo do raio (até 20 tiles). O campo acima limita o alcance do cone.</p>
           </div>
           <div id="colorOptions" class="options-content" hidden>
             <label class="field-label" for="drawColor">COR RGB DA MARCAÇÃO</label>

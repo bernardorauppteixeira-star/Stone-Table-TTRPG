@@ -2479,6 +2479,10 @@
     return projectileEndForAngle(start, aim, settings.angle);
   }
 
+  function projectileExplosionRadius(center, target) {
+    return Math.min(20, Math.hypot(target.x - center.x, target.y - center.y) / GRID);
+  }
+
   function activeTurnCasterToken() {
     return state.tokens.find(token => String(token.id) === String(state.initiative.activeTokenId || '')) || null;
   }
@@ -3981,10 +3985,25 @@
       const caster = activeTurnCasterToken();
       if (!caster) { showToast('Defina um token ativo na iniciativa para lançar cone ou explosão.'); return; }
       if (settings.shape === 'explosion') {
-        if (!pointOnToken(position, caster)) { showToast('Clique no token ativo da iniciativa para confirmar a explosão.'); return; }
-        if (!settings.aoe) { showToast('Defina um raio maior que zero para a explosão.'); return; }
-        const origin = { x: caster.x, y: caster.y };
-        launchProjectile(origin, origin, { ...settings, attackerTokenId: caster.id, instant: true });
+        if (!pendingProjectileStart) {
+          pendingProjectileStart = { ...position, tokenId: caster.id };
+          projectilePreview = { start: position, end: position, aimEnd: position, kind: settings.kind, shape: settings.shape, aoe: 0, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
+          render();
+          return;
+        }
+        if (String(pendingProjectileStart.tokenId) !== String(caster.id)) {
+          pendingProjectileStart = null; projectilePreview = null;
+          showToast('O turno mudou; escolha o centro da explosão novamente.');
+          render();
+          return;
+        }
+        const center = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
+        const aoe = projectileExplosionRadius(center, position);
+        if (!aoe) { showToast('Escolha um raio maior que zero para a explosão.'); return; }
+        pendingProjectileStart = null;
+        projectilePreview = null;
+        dragReadout = null;
+        launchProjectile(center, center, { ...settings, aoe, attackerTokenId: caster.id, instant: true });
         return;
       }
 
@@ -4126,10 +4145,12 @@
         const target = { x: snapCellCenter(point.x), y: snapCellCenter(point.y) };
         const settings = projectileSettings();
         const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
-        const endpoint = projectileAimEnd(start, target, settings);
-        projectilePreview = { start, end: endpoint, aimEnd: target, kind: settings.kind, shape: settings.shape, aoe: settings.aoe, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
-        const tiles = Math.ceil(Math.hypot(target.x - pendingProjectileStart.x, target.y - pendingProjectileStart.y) / GRID);
-        dragReadout = { x: screen.x, y: screen.y, text: `${tiles} tiles` };
+        const explosion = settings.shape === 'explosion';
+        const endpoint = explosion ? start : projectileAimEnd(start, target, settings);
+        const aoe = explosion ? projectileExplosionRadius(start, target) : settings.aoe;
+        projectilePreview = { start, end: endpoint, aimEnd: target, kind: settings.kind, shape: settings.shape, aoe, coneAngle: settings.coneAngle, widthTiles: settings.widthTiles, heightTiles: settings.heightTiles };
+        const distance = Math.hypot(target.x - pendingProjectileStart.x, target.y - pendingProjectileStart.y) / GRID;
+        dragReadout = { x: screen.x, y: screen.y, text: explosion ? `${aoe.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} tiles de raio` : `${Math.ceil(distance)} tiles` };
       }
       if (tool === 'select' && pendingTokenMove) {
         const token = state.tokens.find(item => item.id === pendingTokenMove.id);
@@ -5085,10 +5106,11 @@
     if (!pendingProjectileStart || !projectilePreview) return;
     const settings = projectileSettings();
     const start = { x: pendingProjectileStart.x, y: pendingProjectileStart.y };
-    projectilePreview.end = projectileAimEnd(start, projectilePreview.aimEnd, settings);
+    const explosion = settings.shape === 'explosion';
+    projectilePreview.end = explosion ? start : projectileAimEnd(start, projectilePreview.aimEnd, settings);
     projectilePreview.kind = settings.kind;
     projectilePreview.shape = settings.shape;
-    projectilePreview.aoe = settings.aoe;
+    projectilePreview.aoe = explosion ? projectileExplosionRadius(start, projectilePreview.aimEnd) : settings.aoe;
     projectilePreview.coneAngle = settings.coneAngle;
     projectilePreview.widthTiles = settings.widthTiles;
     projectilePreview.heightTiles = settings.heightTiles;

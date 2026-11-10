@@ -1,12 +1,32 @@
 # Stone League RPG
 
-Mesa virtual para TTRPG. Inicie o servidor com `node server.js` e acesse `http://localhost:3000` para criar uma conta ou entrar com nome de usuário e senha.
+Mesa virtual para TTRPG. Inicie o servidor com `node server.js` e acesse `http://localhost:3000` para criar uma conta ou entrar com nome de usuário, email e senha.
+
+Novos cadastros e contas antigas ainda não verificadas só são ativados após confirmar um código enviado por e-mail. Configure as credenciais SMTP no ambiente antes de iniciar o servidor:
+
+```bash
+export SMTP_HOST="smtp.seu-provedor.com"
+export SMTP_PORT="587"
+export SMTP_USER="usuario"
+export SMTP_PASS="senha-de-aplicativo"
+export SMTP_FROM="Stone League RPG <no-reply@seudominio.com>"
+node server.js
+```
+
+O código expira em 10 minutos. Sem SMTP configurado, novos cadastros e a primeira confirmação de contas antigas não podem ser concluídos.
+
+Para habilitar o login social, crie aplicações OAuth nos consoles do Google e do Discord e configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID` e `DISCORD_CLIENT_SECRET`. Registre estes callbacks nos provedores:
+
+- Google: `http://localhost:3000/auth/google/callback`
+- Discord: `http://localhost:3000/auth/discord/callback`
+
+No modo Live Server, configure `FRONTEND_URL` com a origem da página, por exemplo `http://localhost:5500`. Em produção, use URLs HTTPS e configure `GOOGLE_REDIRECT_URI`, `DISCORD_REDIRECT_URI` e `FRONTEND_URL` com os endereços públicos exatos.
 
 As senhas são armazenadas como hashes scrypt e as sessões usam cookies HttpOnly. As contas ficam em `.stone-table-data/`, ignorada pelo Git. Para disponibilizar o app fora da máquina local, configure HTTPS e um proxy reverso; contas e sessões deste protótipo não sincronizam os dados do jogo, que continuam armazenados localmente no navegador. Projéteis em voo também são salvos no navegador e restaurados após sair e entrar novamente; o movimento continua no próximo turno.
 
 Na área **Configurações**, importe MP3s para a biblioteca local e ajuste a reprodução, afinação, velocidade, loop, reverberação e eco. Ao tocar uma faixa em uma sala, o áudio é enviado aos jogadores conectados e reproduzido nos navegadores deles; cada navegador precisa permitir áudio após uma interação inicial. Os arquivos ficam armazenados localmente no navegador do mestre. Use **Abrir tela dos jogadores** na seção de personagens para abrir `players.html` em outra janela. Mova essa janela para a segunda tela e projete-a manualmente. Os jogadores podem alternar entre o mapa e a tela de personagens; nenhum controle do mestre aparece nessa janela.
 
-Personagens, mapa e iniciativa usam um estado único. Personagens e tokens recém-criados começam com vitalidade e lucidez nos respectivos máximos. Vincule um personagem pelo campo **Token do mapa**; projéteis com dano configurado reduzem a vitalidade do personagem atingido. Na ferramenta de projéteis, além do disparo linear, escolha cone ou explosão: os dois partem do token ativo na iniciativa, cones permitem ajustar o ângulo e explosões usam o raio configurado. O estado antigo é migrado automaticamente ao abrir o Stone League RPG.
+Personagens, mapa e iniciativa usam um estado único. Personagens e tokens recém-criados começam com vitalidade e lucidez nos respectivos máximos. Vincule um personagem pelo campo **Token do mapa**; projéteis com dano configurado reduzem a vitalidade do personagem atingido. Na ferramenta de projéteis, além do disparo linear, escolha cone ou explosão: cones partem do token ativo e permitem ajustar o ângulo; para explosões, clique primeiro no centro e depois no alcance máximo do raio (até 20 tiles). O estado antigo é migrado automaticamente ao abrir o Stone League RPG.
 
 Na área **Personagens e combate**, salve fichas completas na biblioteca local do navegador e carregue-as em outro personagem; atributos, imagem e golpes configurados acompanham a ficha, sem trocar o vínculo do token. Cada atributo pode ser testado com uma rolagem de d20 somada ao seu valor. Cadastre golpes físicos, especiais, brutos, verdadeiros ou de alma com expressões de dano, como `2d6+1`. Para golpes brutos, verdadeiros e de alma, escolha se a força adicional será Física ou Especial. Na **Calculadora de estatísticas**, compare duas fichas para rolar um golpe contra o alvo e, se desejar, aplique o dano à vitalidade; dano de Alma também reduz a Lucidez.
 
