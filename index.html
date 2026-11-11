@@ -22,10 +22,14 @@
       <form class="auth-form" id="authForm">
         <div class="auth-credentials" id="authCredentials">
           <div class="auth-field" id="authUsernameField" hidden>
-            <label for="authUsernameInput">Nome de usuário</label>
-            <input id="authUsernameInput" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+">
+            <label for="authUsernameInput">Nome de exibição</label>
+            <input id="authUsernameInput" name="username" type="text" autocomplete="nickname" minlength="3" maxlength="24">
           </div>
-          <div class="auth-field">
+          <div class="auth-field" id="authIdentifierField">
+            <label for="authIdentifierInput">E-mail ou nome de exibição</label>
+            <input id="authIdentifierInput" name="identifier" type="text" autocomplete="username" maxlength="254" required>
+          </div>
+          <div class="auth-field" id="authEmailField" hidden>
             <label for="authEmailInput">E-mail</label>
             <input id="authEmailInput" name="email" type="email" autocomplete="email" maxlength="254" required>
           </div>
@@ -33,24 +37,22 @@
             <label for="authPasswordInput">Senha</label>
             <input id="authPasswordInput" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
           </div>
+          <div class="auth-field">
+            <label for="authPasswordConfirmationInput">Confirme sua senha</label>
+            <input id="authPasswordConfirmationInput" name="passwordConfirmation" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+          </div>
         </div>
         <div class="auth-verification" id="authVerification" hidden>
           <label for="authVerificationCode">Código de confirmação</label>
           <input id="authVerificationCode" name="verificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6">
           <button class="auth-verification-cancel" id="authVerificationCancel" type="button">Voltar</button>
         </div>
-        <div class="auth-extras" id="authExtras">
-          <div class="auth-providers" aria-label="Outras formas de entrar">
-            <button class="auth-provider" id="googleAuthButton" type="button" disabled><span class="provider-mark google-mark" aria-hidden="true">G</span><span>Continuar com Google</span></button>
-            <button class="auth-provider" id="discordAuthButton" type="button" disabled><span class="provider-mark discord-mark" aria-hidden="true">D</span><span>Continuar com Discord</span></button>
-          </div>
-          <label class="auth-remember" for="rememberUser">
-            <input id="rememberUser" name="remember" type="checkbox">
-            <span>Lembrar de mim</span>
-          </label>
-        </div>
         <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
         <button class="button button-primary auth-submit" id="authSubmit" type="submit">Entrar</button>
+        <button class="auth-google" id="googleAuthButton" type="button">
+          <img src="google-logo.png" alt="" aria-hidden="true">
+          <span>Entrar com o Google</span>
+        </button>
       </form>
       <p class="auth-switch"><span id="authSwitchText">Ainda não tem uma conta?</span> <button type="button" id="authModeButton">Criar conta</button></p>
     </section>
@@ -63,6 +65,7 @@
         <span class="brand-divider"></span>
         <span class="room-title">MESA DE JOGO</span>
       </a>
+      <button class="icon-button tutorial-open-button" id="tutorialOpenButton" type="button" aria-label="Abrir tutorial" title="Abrir tutorial">?</button>
       <nav class="view-switcher" aria-label="Áreas do Stone League RPG">
         <button class="view-button active" id="mapViewButton" type="button" aria-pressed="true">Mapa</button>
         <button class="view-button" id="charactersViewButton" type="button" aria-pressed="false">Configurações</button>
@@ -398,6 +401,11 @@
     <main class="health-workspace" id="healthWorkspace" aria-label="Configurações da mesa" hidden>
       <div id="audioManager"></div>
       <div class="characters-manager" id="charactersManager"></div>
+      <section class="tutorial-settings-actions" aria-labelledby="tutorialSettingsHeading">
+        <h2 id="tutorialSettingsHeading">Ajuda</h2>
+        <p>Revise as principais ferramentas da mesa com o tutorial guiado.</p>
+        <button class="sp-secondary-action" id="tutorialSettingsButton" type="button">Executar tutorial novamente</button>
+      </section>
     </main>
     <main class="health-workspace admin-workspace" id="adminWorkspace" aria-label="Biblioteca administrativa" hidden>
       <header class="admin-heading">
@@ -434,6 +442,30 @@
       </div>
     </main>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+  <div class="tutorial-overlay" id="tutorialOverlay" hidden>
+    <div class="tutorial-shade tutorial-shade-top" aria-hidden="true"></div>
+    <div class="tutorial-shade tutorial-shade-right" aria-hidden="true"></div>
+    <div class="tutorial-shade tutorial-shade-bottom" aria-hidden="true"></div>
+    <div class="tutorial-shade tutorial-shade-left" aria-hidden="true"></div>
+    <div class="tutorial-spotlight" id="tutorialSpotlight" aria-hidden="true"></div>
+    <section class="tutorial-card" id="tutorialCard" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle" aria-describedby="tutorialDescription">
+      <p class="tutorial-step" id="tutorialStep"></p>
+      <h2 id="tutorialTitle">Conheça a mesa</h2>
+      <p id="tutorialDescription"></p>
+      <p class="tutorial-error" id="tutorialError" role="status" aria-live="polite"></p>
+      <div class="tutorial-navigation">
+        <button class="tutorial-previous" id="tutorialPrevious" type="button">Anterior</button>
+        <button class="tutorial-next" id="tutorialNext" type="button">Próximo</button>
+      </div>
+    </section>
+    <div class="tutorial-dismiss-actions">
+      <button id="tutorialSkip" type="button">Pular tutorial</button>
+      <label class="tutorial-disable">
+        <input id="tutorialDisable" type="checkbox">
+        <span>Não mostrar novamente</span>
+      </label>
+    </div>
   </div>
 </body>
 </html>

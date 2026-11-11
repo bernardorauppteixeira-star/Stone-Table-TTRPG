@@ -1,26 +1,23 @@
 # Stone League RPG
 
-Mesa virtual para TTRPG. Inicie o servidor com `node server.js` e acesse `http://localhost:3000` para criar uma conta ou entrar com nome de usuário, email e senha.
+Mesa virtual para TTRPG. Inicie o servidor com `node server.js` e acesse `http://localhost:3000` para criar uma conta com nome de exibição, e-mail e senha (digitada duas vezes), ou entrar com e-mail ou nome de exibição e confirmar a senha.
 
 Novos cadastros e contas antigas ainda não verificadas só são ativados após confirmar um código enviado por e-mail. Configure as credenciais SMTP no ambiente antes de iniciar o servidor:
 
-```bash
-export SMTP_HOST="smtp.seu-provedor.com"
-export SMTP_PORT="587"
-export SMTP_USER="usuario"
-export SMTP_PASS="senha-de-aplicativo"
-export SMTP_FROM="Stone League RPG <no-reply@seudominio.com>"
+Servidor:
+$env:SMTP_HOST="smtp.gmail.com"
+$env:SMTP_PORT="587"
+$env:SMTP_USER="bernardorauppteixeira@gmail.com"
+$env:SMTP_PASS="senha_de_app_do_google"
+$env:SMTP_FROM="Stone League RPG <bernardorauppteixeira@gmail.com>"
 node server.js
-```
+
+Login Google:
+$env:GOOGLE_CLIENT_ID="seu-client-id"
+$env:GOOGLE_CLIENT_SECRET="seu-client-secret"
+node server.js
 
 O código expira em 10 minutos. Sem SMTP configurado, novos cadastros e a primeira confirmação de contas antigas não podem ser concluídos.
-
-Para habilitar o login social, crie aplicações OAuth nos consoles do Google e do Discord e configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID` e `DISCORD_CLIENT_SECRET`. Registre estes callbacks nos provedores:
-
-- Google: `http://localhost:3000/auth/google/callback`
-- Discord: `http://localhost:3000/auth/discord/callback`
-
-No modo Live Server, configure `FRONTEND_URL` com a origem da página, por exemplo `http://localhost:5500`. Em produção, use URLs HTTPS e configure `GOOGLE_REDIRECT_URI`, `DISCORD_REDIRECT_URI` e `FRONTEND_URL` com os endereços públicos exatos.
 
 As senhas são armazenadas como hashes scrypt e as sessões usam cookies HttpOnly. As contas ficam em `.stone-table-data/`, ignorada pelo Git. Para disponibilizar o app fora da máquina local, configure HTTPS e um proxy reverso; contas e sessões deste protótipo não sincronizam os dados do jogo, que continuam armazenados localmente no navegador. Projéteis em voo também são salvos no navegador e restaurados após sair e entrar novamente; o movimento continua no próximo turno.
 

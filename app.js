@@ -2507,9 +2507,11 @@
       const attackerCharacter = attacker ? getLinkedCharacterForToken(attacker) : null;
       const rhythm = prepareRhythmAttack(attackerCharacter, character, projectile.attackId || projectile.id);
       const criticalBonusPercent = Math.max(0, asFiniteNumber(attackerCharacter?.criticalBonusPercent, 10));
+      /*
       const instinctRoll = window.StonePlateDice?.rollInstinctAttack?.(criticalBonusPercent);
       const instinctValue = instinctRoll?.groups?.[0]?.values?.[0] || 0;
       const instinctSurge = instinctValue === 100;
+      */
       let attackRoll = null;
       let rolledDamage = null;
       if (projectile.autoRollDamage && projectile.damageExpression) {
@@ -2538,7 +2540,8 @@
         damageType,
         damageForceType,
         attacker: attackerCharacter,
-        criticalDamageBonusPercent: instinctSurge || attackRoll?.isSurge
+        // criticalDamageBonusPercent: instinctSurge || attackRoll?.isSurge
+        criticalDamageBonusPercent: attackRoll?.isSurge
           ? criticalBonusPercent * 3
           : attackRoll?.isCritical ? criticalBonusPercent + criticalDamageBonusForToken(attackerCharacter?.linkedTokenId, character.linkedTokenId) : 0,
         rhythmDamageBonusPercent: rhythm.damageBonusPercent,

@@ -61,7 +61,8 @@ const PUBLIC_STATIC_FILES = new Set([
   'auth.css',
   'auth.js',
   'styles.css',
-  'stone-league-logo.png'
+  'stone-league-logo.png',
+  'google-logo.png'
 ]);
 
 function sendJson(response, status, value, headers = {}) {
@@ -487,7 +488,7 @@ function validEmail(value) {
 }
 
 function validUsername(value) {
-  return /^[a-zA-Z0-9_]{3,24}$/.test(value);
+  return value.length >= 3 && value.length <= 24 && !/[\u0000-\u001f\u007f@]/.test(value);
 }
 
 function emailUsedByAnotherUser(users, email, username) {
@@ -528,7 +529,7 @@ async function verifyEmail(request, response) {
       return true;
     });
     pendingVerifications.delete(challengeId);
-    if (!created) return sendJson(response, 409, { error: 'Esse nome de usuário ou e-mail já está em uso.' });
+    if (!created) return sendJson(response, 409, { error: 'Esse nome de exibição ou e-mail já está em uso.' });
     const token = createSession(pending.data.username, pending.remember);
     return sendJson(response, 200, { username: pending.data.username }, {
       'Set-Cookie': sessionCookie(request, token, pending.remember)
@@ -586,32 +587,42 @@ async function handleApi(request, response, pathname) {
   }
   if (!checkRateLimit(request, response)) return;
 
-  const { username: rawUsername, email: rawEmail, password, remember: rememberChoice } = await readJson(request);
+  const {
+    username: rawUsername,
+    identifier: rawIdentifier,
+    email: rawEmail,
+    password,
+    passwordConfirmation
+  } = await readJson(request);
   const username = normalizeUsername(rawUsername);
   const email = normalizeEmail(rawEmail);
-  const key = usernameKey(username);
-  const remember = rememberChoice === true;
-  if (!validEmail(email)) {
-    return sendJson(response, 400, { error: 'Informe um endereço de e-mail válido.' });
-  }
+  const identifier = normalizeUsername(rawIdentifier || rawEmail || rawUsername);
+  const identifierEmail = normalizeEmail(identifier);
+  const remember = false;
   if (pathname === '/api/register') {
     if (!validUsername(username)) {
-      return sendJson(response, 400, { error: 'O nome deve ter de 3 a 24 letras, números ou sublinhados.' });
+      return sendJson(response, 400, { error: 'O nome de exibição deve ter de 3 a 24 caracteres e não pode conter @.' });
+    }
+    if (!validEmail(email)) {
+      return sendJson(response, 400, { error: 'Informe um endereço de e-mail válido.' });
     }
     if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
       return sendJson(response, 400, { error: 'A senha deve ter entre 8 e 128 caracteres.' });
     }
+    if (typeof passwordConfirmation !== 'string' || password !== passwordConfirmation) {
+      return sendJson(response, 400, { error: 'As senhas informadas não coincidem.' });
+    }
 
     const users = await readUsers();
-    if (users.some(saved => saved.usernameKey === key || normalizeEmail(saved.emailKey || saved.email) === email)) {
-      return sendJson(response, 409, { error: 'Esse nome de usuário ou e-mail já está em uso.' });
+    if (users.some(saved => saved.usernameKey === usernameKey(username) || normalizeEmail(saved.emailKey || saved.email) === email)) {
+      return sendJson(response, 409, { error: 'Esse nome de exibição ou e-mail já está em uso.' });
     }
 
     const salt = crypto.randomBytes(16);
     const passwordHash = await derivePassword(password, salt);
     const user = {
       username,
-      usernameKey: key,
+      usernameKey: usernameKey(username),
       email,
       emailKey: email,
       salt: salt.toString('hex'),
@@ -622,34 +633,34 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 202, verification);
   }
 
-  if (typeof password !== 'string' || password.length > 128) {
+  if (!identifier || typeof password !== 'string' || password.length > 128 ||
+      typeof passwordConfirmation !== 'string' || password !== passwordConfirmation) {
     return sendJson(response, 401, { error: 'Usuário, e-mail ou senha inválidos.' });
   }
   const users = await readUsers();
   const user = users.find(saved => {
     const savedEmail = normalizeEmail(saved.emailKey || saved.email);
-    const emailMatches = savedEmail ? savedEmail === email : Boolean(key) && saved.usernameKey === key;
-    return emailMatches && (!key || saved.usernameKey === key);
+    return validEmail(identifierEmail)
+      ? savedEmail === identifierEmail
+      : saved.usernameKey === usernameKey(identifier);
   });
   const salt = user ? Buffer.from(user.salt, 'hex') : dummySalt;
   const expectedHash = user ? Buffer.from(user.passwordHash, 'hex') : await dummyHash;
   const actualHash = await derivePassword(password, salt);
   const valid = actualHash.length === expectedHash.length && crypto.timingSafeEqual(actualHash, expectedHash);
   if (!user || !valid) return sendJson(response, 401, { error: 'Usuário, e-mail ou senha inválidos.' });
-  if (user.emailKey && normalizeEmail(user.emailKey) !== email) {
-    return sendJson(response, 401, { error: 'Usuário, e-mail ou senha inválidos.' });
-  }
-  if (user.emailVerified && normalizeEmail(user.emailKey || user.email) === email) {
+  const userEmail = normalizeEmail(user.emailKey || user.email);
+  if (user.emailVerified && validEmail(userEmail)) {
     const token = createSession(user.username, remember);
     return sendJson(response, 200, { username: user.username }, {
       'Set-Cookie': sessionCookie(request, token, remember)
     });
   }
 
-  if (emailUsedByAnotherUser(users, email, user.usernameKey)) {
+  if (!validEmail(userEmail) || emailUsedByAnotherUser(users, userEmail, user.usernameKey)) {
     return sendJson(response, 401, { error: 'Usuário, e-mail ou senha inválidos.' });
   }
-  const verification = await createEmailVerification('login', { username: user.username, usernameKey: user.usernameKey }, email, remember);
+  const verification = await createEmailVerification('login', { username: user.username, usernameKey: user.usernameKey }, userEmail, remember);
   return sendJson(response, 202, verification);
 }
 
